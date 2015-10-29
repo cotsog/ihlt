@@ -1,0 +1,6 @@
+addons:
+  apt:
+    packages:
+    - libipc-run-perl
+
+script: make test
