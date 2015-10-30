@@ -19,8 +19,6 @@
  *   http://www.tenouk.com/Module41.html
  */
 
-/*******select.c*********/
-/*******Using select() for I/O multiplexing */
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -29,8 +27,8 @@
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <arpa/inet.h>
-/* port we're listening on */
-#define PORT 2020
+/* port we're listening on phone coded msg */
+#define PORT 4458
 
 int main(int argc, char *argv[]) {
 	/* master file descriptor list */
@@ -39,21 +37,13 @@ int main(int argc, char *argv[]) {
 	fd_set read_fds;
 	/* server address */
 	struct sockaddr_in serveraddr;
-	/* client address */
-	struct sockaddr_in clientaddr;
 	/* maximum file descriptor number */
 	int fdmax;
 	/* listening socket descriptor */
 	int listener;
-	/* newly accept()ed socket descriptor */
-	int newfd;
-	/* buffer for client data */
-	char buf[1024];
-	int nbytes;
 	/* for setsockopt() SO_REUSEADDR, below */
 	int yes = 1;
 	int addrlen;
-	int i, j;
 
 	/* clear the master and temp sets */
 	FD_ZERO(&master);
@@ -61,18 +51,16 @@ int main(int argc, char *argv[]) {
 
 	/* get the listener */
 	if ((listener = socket(AF_INET, SOCK_STREAM, 0)) == -1) {
-		perror("Server-socket() error lol!");
-		/*just exit lol!*/
+		perror("Error creating listener");
 		exit(1);
 	}
-	printf("Server-socket() is OK...\n");
-	/*"address already in use" error message */
+
+	/* I.E. "address already in use" error message */
 	if (setsockopt(listener, SOL_SOCKET, SO_REUSEADDR, &yes, sizeof(int))
 			== -1) {
-		perror("Server-setsockopt() error lol!");
+		perror("Error setting address reusable");
 		exit(1);
 	}
-	printf("Server-setsockopt() is OK...\n");
 
 	/* bind */
 	serveraddr.sin_family = AF_INET;
@@ -82,22 +70,20 @@ int main(int argc, char *argv[]) {
 
 	if (bind(listener, (struct sockaddr *) &serveraddr, sizeof(serveraddr))
 			== -1) {
-		perror("Server-bind() error lol!");
+		perror("Error opening listener");
 		exit(1);
 	}
-	printf("Server-bind() is OK...\n");
 
 	/* listen */
 	if (listen(listener, 10) == -1) {
-		perror("Server-listen() error lol!");
+		perror("Error listening");
 		exit(1);
 	}
-	printf("Server-listen() is OK...\n");
 
 	/* add the listener to the master set */
 	FD_SET(listener, &master);
 	/* keep track of the biggest file descriptor */
-	fdmax = listener; /* so far, it's this one*/
+	fdmax = listener; /* so far, it's this one */
 
 	/* loop */
 	for (;;) {
@@ -105,23 +91,25 @@ int main(int argc, char *argv[]) {
 		read_fds = master;
 
 		if (select(fdmax + 1, &read_fds, NULL, NULL, NULL) == -1) {
-			perror("Server-select() error lol!");
+			perror("Error waiting for input");
 			exit(1);
 		}
-		printf("Server-select() is OK...\n");
 
 		/* run through the existing connections looking for data to be read */
+		int i;
 		for (i = 0; i <= fdmax; i++) {
 			if (FD_ISSET(i, &read_fds)) { /* we got one... */
 				if (i == listener) {
 					/* handle new connections */
+					/* client address */
+					struct sockaddr_in clientaddr;
+					/* newly accept()ed socket descriptor */
+					int newfd;
 					addrlen = sizeof(clientaddr);
 					if ((newfd = accept(listener,
 							(struct sockaddr *) &clientaddr, &addrlen)) == -1) {
-						perror("Server-accept() error lol!");
+						perror("Warning accepting one new connection");
 					} else {
-						printf("Server-accept() is OK...\n");
-
 						FD_SET(newfd, &master);
 						/* add to master set */
 						if (newfd > fdmax) /* keep track of the maximum */
@@ -131,21 +119,23 @@ int main(int argc, char *argv[]) {
 					}
 				} else {
 					/* handle data from a client */
+					/* buffer for client data */
+					char buf[1024];
+					int nbytes;
 					if ((nbytes = recv(i, buf, sizeof(buf), 0)) <= 0) {
 						/* got error or connection closed by client */
 						if (nbytes == 0)
 							/* connection closed */
 							printf("%s: socket %d hung up\n", argv[0], i);
-
 						else
-							perror("recv() error lol!");
-
+							perror("Negative recv");
 						/* close it... */
 						close(i);
 						/* remove from master set */
 						FD_CLR(i, &master);
 					} else {
-						/* we got some data from a client*/
+						/* we got some data from a client */
+						int j;
 						for (j = 0; j <= fdmax; j++) {
 							/* send to everyone! */
 							if (FD_ISSET(j, &master)) {
