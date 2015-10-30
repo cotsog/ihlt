@@ -1,4 +1,4 @@
-use Test::More tests => 12;
+use Test::More tests => 20;
 use IPC::Run qw(start);
 
 my $ihlt = start( ['src/ihlt'], undef, '>&2' );
@@ -28,24 +28,40 @@ for ( 1 .. 3 ) {
 
 my $response = "";
 
+$sockets[2]->autoflush(1);
+ok( $sockets[2]->send("Hello World") == 11, 'third msg began' );
+
 # data to send to a server
 $sockets[1]->autoflush(1);
 ok( $sockets[1]->send("Hello World\n") == 12, 'first msg sent' );
 $sockets[2]->recv( $response, 20 );
-diag $response;
 ok $response eq "Hello,World!\n", 'first msg recv';
 $sockets[3]->recv( $response, 20 );
-diag $response;
 ok $response eq "Hello,World!\n", 'first msg recv again';
 
 $sockets[3]->autoflush(1);
 ok( $sockets[3]->send("Hello World\n") == 12, 'second msg sent' );
 $sockets[2]->recv( $response, 20 );
-diag $response;
 ok $response eq "Hello,World!\n", 'second msg recv';
 $sockets[1]->recv( $response, 20 );
-diag $response;
 ok $response eq "Hello,World!\n", 'second msg recv again';
+
+$sockets[1]->blocking(0);
+$sockets[1]->recv( $response, 20 );
+diag $!;
+ok $! == $!{EWOULDBLOCK}, 'recv would block';
+ok $response eq "", 'recv string empty';
+$sockets[3]->blocking(0);
+$sockets[3]->recv( $response, 20 );
+diag $!;
+ok $! == $!{EWOULDBLOCK}, 'recv would block again';
+ok $response eq "", 'recv string empty again';
+
+ok( $sockets[2]->send("\n") == 1, 'third msg sent' );
+$sockets[1]->recv( $response, 20 );
+ok $response eq "Hello,World!\n", 'third msg recv';
+$sockets[3]->recv( $response, 20 );
+ok $response eq "Hello,World!\n", 'third msg recv again';
 
 ok $sockets[$_]->close(), "$_: closed" for ( 1 .. 3 );
 
