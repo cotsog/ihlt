@@ -30,6 +30,9 @@
 /* port we're listening on phone coded msg */
 #define PORT 4458
 
+#include <string.h>
+#include "ConnectionsDoublyLinkedList.h"
+
 int main(int argc, char *argv[]) {
 	/* master file descriptor list */
 	fd_set master;
@@ -101,60 +104,67 @@ int main(int argc, char *argv[]) {
 			exit(1);
 		}
 
-		/* run through the existing connections looking for data to be read */
-		int i;
-		for (i = 0; i <= fdmax; i++) {
-			if (FD_ISSET(i, &read_fds)) { /* we got one... */
-				if (i == listener) {
-					/* handle new connections */
-					/* client address */
-					struct sockaddr_in clientaddr;
-					/* newly accept()ed socket descriptor */
-					int newfd;
-					addrlen = sizeof(clientaddr);
-					if ((newfd = accept(listener,
-							(struct sockaddr *) &clientaddr, &addrlen)) == -1) {
-						perror("Warning accepting one new connection");
-					} else {
-						FD_SET(newfd, &master);
-						/* add to master set */
-						if (newfd > fdmax) /* keep track of the maximum */
-							fdmax = newfd;
-						printf("%s: New connection from %s on socket %d\n",
-								argv[0], inet_ntoa(clientaddr.sin_addr), newfd);
-					}
-				} else {
-					/* handle data from a client */
-					/* buffer for client data */
-					char buf[1024];
-					int nbytes;
-					if ((nbytes = recv(i, buf, sizeof(buf), 0)) <= 0) {
-						/* got error or connection closed by client */
-						if (nbytes == 0)
-							/* connection closed */
-							printf("%s: socket %d hung up\n", argv[0], i);
-						else
-							perror("Negative recv");
-						/* close it... */
-						close(i);
-						/* remove from master set */
-						FD_CLR(i, &master);
-					} else {
-						/* we got some data from a client */
-						int j;
-						for (j = 0; j <= fdmax; j++) {
-							/* send to everyone! */
-							if (FD_ISSET(j, &master)) {
-								/* except the listener and ourselves */
-								if (j != listener && j != i)
-									if (send(j, buf, nbytes, 0) == -1)
-										perror("send() error lol!");
-							}
-						}
-					}
-				}
+		if (FD_ISSET(listener, &read_fds)) { /* we got a new one... */
+			/* handle new connections */
+			struct ConnectionNode *TempNode = GetNewConnection();
+			TempNode->clientaddr_len = sizeof(TempNode->clientaddr);
+			if ((TempNode->fd = accept(listener,
+					(struct sockaddr *) &TempNode->clientaddr,
+					&TempNode->clientaddr_len)) == -1) {
+				perror("Warning accepting one new connection");
+			} else {
+				if (fdmax < TempNode->fd) /* keep track of the maximum */
+					fdmax = TempNode->fd;
+				FD_SET(TempNode->fd, &master);
+				/* add to master set */
+				InsertConnectionBefore(&connections_head, TempNode);
+				printf("%s: New connection from %s on socket %d index %d\n", argv[0],
+						inet_ntoa(TempNode->clientaddr.sin_addr), TempNode->fd, TempNode->index);
 			}
 		}
+
+		/* run through the existing connections looking for data to be read */
+		struct ConnectionNode *i = connections_head;
+		if(connections_head != NULL)
+		do {
+			if (FD_ISSET(i->fd, &read_fds)) { /* we got one... */
+				/* handle data from a client */
+				printf("%s: New data from %s on socket %d index %d\n", argv[0],
+						inet_ntoa(i->clientaddr.sin_addr), i->fd, i->index);
+				/* buffer for client data */
+				char buf[1024];
+				int nbytes;
+				if ((nbytes = recv(i->fd, buf, sizeof(buf), 0)) <= 0) {
+					/* got error or connection closed by client */
+					if (nbytes == 0)
+						/* connection closed */
+						printf("%s: socket to %s hung up on socket %d index %d\n", argv[0],
+								inet_ntoa(i->clientaddr.sin_addr), i->fd, i->index);
+					else
+						perror("Negative recv");
+					/* close it... */
+					close(i->fd);
+					/* remove from master set */
+					FD_CLR(i->fd, &master);
+					/* step back and remove this connection */
+					i = RemoveConnection(i);
+					if( i == NULL ) break;
+				} else {
+					/* we got some data from a client */
+					printf("%s: socket recv from %s on socket %d index %d\n", argv[0],
+							inet_ntoa(i->clientaddr.sin_addr), i->fd, i->index);
+					struct ConnectionNode *j;
+					for (j = i->next; j != i; j = j->next) {
+						printf("%s: socket send to %s on socket %d index %d\n", argv[0],
+								inet_ntoa(j->clientaddr.sin_addr), j->fd, j->index);
+						if (send(j->fd, buf, nbytes, 0) == -1)
+							perror("Negative send");
+					}
+
+				}
+			}
+			i = i->next;
+		} while(i != connections_head);
 	}
 	return 0;
 }
