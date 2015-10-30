@@ -21,6 +21,7 @@
 
 #include <stdio.h>
 #include <stdlib.h>
+#include <stdbool.h>
 #include <string.h>
 #include <unistd.h>
 #include <sys/types.h>
@@ -35,31 +36,100 @@
 
 void LineLocator(struct ConnectionNode *conn) {
 	/* look for the end of the line */
-	struct ConnectionNode *j;
-	for (j = conn->next; j != conn; j = j->next) {
-		printf("socket send to %s on socket %d index %d\n",
-				inet_ntoa(j->clientaddr.sin_addr), j->fd, j->index);
-		if (send(j->fd, conn->buf, conn->nbytes, 0) == -1)
-			perror("Negative send");
+	char *str1, *saveptr1, *ntoken, *token;
+	bool endswell = false;
+	switch (conn->buf[conn->nbytes - 1]) {
+	case '\r':
+	case '\n':
+		endswell = true;
+		break;
+	};
+
+	for (str1 = conn->buf;; str1 = NULL) {
+		ntoken = strtok_r(str1, "\r\n", &saveptr1);
+		/* Reverse this so we know the next result. */
+		if (str1 == NULL) {
+			if (ntoken != NULL || endswell) {
+				char *str2, *saveptr2, *subtoken, *t = NULL;
+				char **argv = malloc(0);
+				int argc = 0;
+
+				for (str2 = token;; str2 = NULL) {
+					subtoken = strtok_r(str2, " \t", &saveptr2);
+					if (subtoken == NULL)
+						break;
+					argv = realloc(argv, sizeof(void*) * (argc + 1));
+					argv[argc++] = subtoken;
+					if (t != NULL) {
+						size_t n = strlen(t) + strlen(subtoken) + 2;
+						t = realloc(t, n);
+						strncat(t, ",", n);
+						strncat(t, subtoken, n);
+					} else {
+						{
+							size_t n = strlen(subtoken) + 2;
+							t = malloc(n);
+							strncpy(t, subtoken, n);
+						}
+					}
+				}
+				strcat(t, "!\n");
+				struct ConnectionNode *dest;
+				for (dest = conn->next; dest != conn; dest = dest->next) {
+					printf("socket send to %s on socket %d index %d\n",
+							inet_ntoa(dest->clientaddr.sin_addr), dest->fd,
+							dest->index);
+					if (send(dest->fd, t, strlen(t), 0) == -1)
+						perror("Negative send");
+				}
+				free(t);
+				t = NULL;
+				if (ntoken == NULL) {
+					free(conn->buf);
+					conn->buf = NULL;
+					conn->nbytes = 0;
+					break;
+				}
+			} else {
+				conn->nbytes = strlen(token);
+				str1 = strdup(token);
+				free(conn->buf);
+				conn->buf = str1;
+				break;
+			}
+		}
+		token = ntoken;
 	}
-	free(conn->buf);
-	conn->buf = NULL;
-	conn->nbytes = 0;
 }
 
 void ProccessInput(struct ConnectionNode *conn, char *buf, size_t nbytes) {
 	/* we got some data from a client */
+	conn->nbytes += nbytes;
 	printf("socket recv from %s on socket %d index %d\n",
 			inet_ntoa(conn->clientaddr.sin_addr), conn->fd, conn->index);
-	conn->nbytes += nbytes;
-	if(conn->buf != NULL) {
-		char *t;
-		t = malloc(conn->nbytes + 1);
-		strncpy(t, conn->buf, conn->nbytes + 1);
-		strncat(t, buf, conn->nbytes + 1);
-	} else
-		conn->buf = strdup(buf);
-	LineLocator(conn);
+	if (strnlen(buf, nbytes) != nbytes) {
+		/* this would be a crash */
+		printf("socket to %s send non-string\n",
+				inet_ntoa(conn->clientaddr.sin_addr));
+		char e[42];
+		sprintf(e, "551 Invalid string %4d bytes discarded\r\n", conn->nbytes);
+		write(conn->fd, &e, 41);
+		if (conn->buf)
+			free(conn->buf);
+		conn->buf = NULL;
+		conn->nbytes = 0;
+	} else {
+		if (conn->buf != NULL) {
+			char *t;
+			t = malloc(conn->nbytes);
+			strncpy(t, conn->buf, conn->nbytes);
+			strncat(t, buf, conn->nbytes);
+			free(conn->buf);
+			conn->buf = t;
+		} else
+			conn->buf = strdup(buf);
+		LineLocator(conn);
+	}
 }
 
 int main(int argc, char *argv[]) {
@@ -165,7 +235,7 @@ int main(int argc, char *argv[]) {
 					/* buffer for client data */
 					char buf[1024];
 					int nbytes;
-					if ((nbytes = recv(i->fd, buf, sizeof(buf)-1, 0)) <= 0) {
+					if ((nbytes = recv(i->fd, buf, sizeof(buf) - 1, 0)) <= 0) {
 						/* got error or connection closed by client */
 						if (nbytes == 0)
 							/* connection closed */
