@@ -13,7 +13,7 @@ for ( 1 .. 3 ) {
     do {
         $sockets[$_] = new IO::Socket::INET(
             PeerHost => '127.0.0.1',
-            PeerPort => '2020',
+            PeerPort => '4458',
             Proto    => 'tcp',
         );
       } while ( !$socket[$_]
