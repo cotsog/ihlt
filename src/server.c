@@ -61,6 +61,12 @@ int main(int argc, char *argv[]) {
 		perror("Error setting address reusable");
 		exit(1);
 	}
+#ifdef SO_REUSEPORT
+	if (setsockopt(listener, SOL_SOCKET, SO_REUSEPORT, &yes, sizeof(int))) {
+		perror("Error setting port reusable");
+		exit(1);
+	}
+#endif
 
 	/* bind */
 	serveraddr.sin_family = AF_INET;
