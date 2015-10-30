@@ -30,7 +30,7 @@ void InsertConnectionBefore(struct ConnectionNode **a, struct ConnectionNode *b)
 	}
 	if (connections_head == NULL)
 		connections_head = *a;
-	if(*a != b) {
+	if (*a != b) {
 		b->prev = (*a)->prev;
 		b->prev->next = b;
 		b->next = *a;

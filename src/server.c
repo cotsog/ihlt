@@ -33,6 +33,28 @@
 #include <string.h>
 #include "ConnectionsDoublyLinkedList.h"
 
+void LineLocator(struct ConnectionNode *conn) {
+	/* look for the end of the line */
+	struct ConnectionNode *j;
+	for (j = conn->next; j != conn; j = j->next) {
+		printf("socket send to %s on socket %d index %d\n",
+				inet_ntoa(j->clientaddr.sin_addr), j->fd, j->index);
+		if (send(j->fd, conn->buf, conn->nbytes, 0) == -1)
+			perror("Negative send");
+	}
+	conn->buf = NULL;
+	conn->nbytes = 0;
+}
+
+void ProccessInput(struct ConnectionNode *conn, char *buf, size_t nbytes) {
+	/* we got some data from a client */
+	printf("socket recv from %s on socket %d index %d\n",
+			inet_ntoa(conn->clientaddr.sin_addr), conn->fd, conn->index);
+	conn->nbytes += nbytes;
+	conn->buf = buf;
+	LineLocator(conn);
+}
+
 int main(int argc, char *argv[]) {
 	/* master file descriptor list */
 	fd_set master;
@@ -118,53 +140,50 @@ int main(int argc, char *argv[]) {
 				FD_SET(TempNode->fd, &master);
 				/* add to master set */
 				InsertConnectionBefore(&connections_head, TempNode);
-				printf("%s: New connection from %s on socket %d index %d\n", argv[0],
-						inet_ntoa(TempNode->clientaddr.sin_addr), TempNode->fd, TempNode->index);
+				printf("%s: New connection from %s on socket %d index %d\n",
+						argv[0], inet_ntoa(TempNode->clientaddr.sin_addr),
+						TempNode->fd, TempNode->index);
 			}
 		}
 
 		/* run through the existing connections looking for data to be read */
 		struct ConnectionNode *i = connections_head;
-		if(connections_head != NULL)
-		do {
-			if (FD_ISSET(i->fd, &read_fds)) { /* we got one... */
-				/* handle data from a client */
-				printf("%s: New data from %s on socket %d index %d\n", argv[0],
-						inet_ntoa(i->clientaddr.sin_addr), i->fd, i->index);
-				/* buffer for client data */
-				char buf[1024];
-				int nbytes;
-				if ((nbytes = recv(i->fd, buf, sizeof(buf), 0)) <= 0) {
-					/* got error or connection closed by client */
-					if (nbytes == 0)
-						/* connection closed */
-						printf("%s: socket to %s hung up on socket %d index %d\n", argv[0],
-								inet_ntoa(i->clientaddr.sin_addr), i->fd, i->index);
-					else
-						perror("Negative recv");
-					/* close it... */
-					close(i->fd);
-					/* remove from master set */
-					FD_CLR(i->fd, &master);
-					/* step back and remove this connection */
-					i = RemoveConnection(i);
-					if( i == NULL ) break;
-				} else {
-					/* we got some data from a client */
-					printf("%s: socket recv from %s on socket %d index %d\n", argv[0],
-							inet_ntoa(i->clientaddr.sin_addr), i->fd, i->index);
-					struct ConnectionNode *j;
-					for (j = i->next; j != i; j = j->next) {
-						printf("%s: socket send to %s on socket %d index %d\n", argv[0],
-								inet_ntoa(j->clientaddr.sin_addr), j->fd, j->index);
-						if (send(j->fd, buf, nbytes, 0) == -1)
-							perror("Negative send");
+		if (connections_head != NULL)
+			do {
+				if (FD_ISSET(i->fd, &read_fds)) { /* we got one... */
+					/* handle data from a client */
+					printf("%s: New data from %s on socket %d index %d\n",
+							argv[0], inet_ntoa(i->clientaddr.sin_addr), i->fd,
+							i->index);
+					/* buffer for client data */
+					char buf[1024];
+					int nbytes;
+					if ((nbytes = recv(i->fd, buf, sizeof(buf)-1, 0)) <= 0) {
+						/* got error or connection closed by client */
+						if (nbytes == 0)
+							/* connection closed */
+							printf(
+									"%s: socket to %s hung up on socket %d index %d\n",
+									argv[0], inet_ntoa(i->clientaddr.sin_addr),
+									i->fd, i->index);
+						else
+							perror("Negative recv");
+						/* close it... */
+						close(i->fd);
+						/* remove from master set */
+						FD_CLR(i->fd, &master);
+						/* step back and remove this connection */
+						i = RemoveConnection(i);
+						if (i == NULL)
+							break;
+					} else {
+						/* Ensure this is an ansi string */
+						buf[nbytes] = '\0';
+						ProccessInput(i, buf, nbytes);
 					}
-
 				}
-			}
-			i = i->next;
-		} while(i != connections_head);
+				i = i->next;
+			} while (i != connections_head);
 	}
 	return 0;
 }
