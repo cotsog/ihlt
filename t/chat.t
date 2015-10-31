@@ -52,8 +52,9 @@ $sockets[3]->recv( $response, 28 );
 ok $response eq "211 pong: Hello World!\r\n", 'echo msg recv';
 
 ok( $sockets[1]->send("bad Hello World!\n") == 17, 'bad msg sent' );
-$sockets[1]->recv( $response, 53);
-ok $response eq "502 Bad command or it is not implemented here.\r\n", 'bad msg recv';
+$sockets[1]->recv( $response, 53 );
+ok $response eq "502 Bad command or it is not implemented here.\r\n",
+  'bad msg recv';
 
 $sockets[1]->blocking(0);
 $sockets[1]->recv( $response, 28 );
@@ -66,7 +67,7 @@ $sockets[3]->blocking(1);
 ok $! == $!{EWOULDBLOCK}, 'recv would block again';
 ok $response eq "", 'recv string empty again';
 
-ok( $sockets[2]->send("\n") == 1, 'wall msg sent' );
+  ok( $sockets[2]->send("\n") == 1, 'wall msg sent' );
 $sockets[1]->recv( $response, 28 );
 ok $response eq "211 wall: Hello World!\r\n", 'wall msg recv';
 $sockets[3]->recv( $response, 28 );
