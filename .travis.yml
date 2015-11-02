@@ -1,6 +1,9 @@
 addons:
   apt:
     packages:
+    - strace
     - libipc-run-perl
 
-script: make test
+
+script: 
+  - set -x; make test
