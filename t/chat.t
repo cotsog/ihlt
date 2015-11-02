@@ -10,6 +10,7 @@ my @sockets;
 for ( 1 .. 3 ) {
     my $ctr = 0;
     do {
+	sleep $ctr;
         $sockets[$_] = new IO::Socket::INET(
             PeerHost => '127.0.0.1',
             PeerPort => '4458',
@@ -18,7 +19,7 @@ for ( 1 .. 3 ) {
       } while ( !$socket[$_]
         && $_ == 1
         && $! == $!{ECONNREFUSED}
-        && $ctr++ < 500 );
+        && $ctr++ < 5000 );
     unless ( $sockets[$_] ) {
         fail "$_: $ctr: cannot connect to the server $!\n";
         die;
