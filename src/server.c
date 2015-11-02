@@ -27,6 +27,7 @@
 #include <stdlib.h>
 #include <unistd.h>
 #include <errno.h>
+#include <linux/time.h>
 #include <stdbool.h>
 #include <string.h>
 
@@ -246,7 +247,8 @@ void EnterListener(struct ListenerOptions *opts) {
 				/* add to master set */
 				fdmax = TempNode->fd;
 				fdmax = TempNode->fd;
-
+				TBTouch("baddr", crc8(0, TempNode->addr.__ss_padding, TempNode->addr_len/2), (1000,3), 1);
+				TBTouch("daddr", crc8(0, TempNode->addr.__ss_padding, TempNode->addr_len), (1000,60), 60, 1);
 				j = getnameinfo((struct sockaddr *) &TempNode->addr,
 						TempNode->addr_len, TempNode->host, NI_MAXHOST, NULL, 0,
 						0);

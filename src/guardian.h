@@ -16,25 +16,44 @@
  */
 
 /* Example from:
- *
+ *   
  */
 
-#ifndef SERVER_H_
-#define SERVER_H_
+#ifndef GUARDIAN_H_
+#define GUARDIAN_H_
 
-#include <sys/types.h>
-#include "protocol.h"
-#include "guardian.h"
+#include <linux/time.h>
 
-extern int sock_send(int, char *, size_t);
-
-struct ListenerOptions {
-	char *nodename;
-	char *servname;
-	/* server address */
-	struct addrinfo hints;
+struct TBPool {
+	struct timespec last;
+	int cur;
 };
 
-extern void EnterListener(struct ListenerOptions *);
+struct TBArgs {
+	double period;
+	int adj;
+};
 
-#endif /* SERVER_H_ */
+struct TBNamespace;
+struct TBNamespace {
+	char *name;
+	struct TBPool *pool[255];
+	struct TBNamespace *next;
+};
+
+extern struct TBNamespace *firsttb;
+
+extern int TBTouch(char *, unsigned, struct TBArgs *, int);
+
+struct CTRNamespace;
+struct CTRNamespace {
+	char *name;
+	struct CTRNamespace *next;
+	int pool[255];
+};
+
+extern struct CTRNamespace *firstctr;
+
+extern unsigned crc8(unsigned, unsigned char *, size_t);
+
+#endif /* GUARDIAN_H_ */
